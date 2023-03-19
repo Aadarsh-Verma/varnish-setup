@@ -60,7 +60,7 @@ sub vcl_recv {
         var.global_set("99ab-str",cookie.get("99_ab"));
     }
     else{
-        client.init("get_visitor_id", "http://sanity10.infoedge.com/api-aggregator/content/get-visitor-id");
+        client.init("get_visitor_id", "http://99acres.com/api-aggregator/content/get-visitor-id");
         client.send("get_visitor_id");
         set req.http.X-cookie-data = client.header("get_visitor_id","Set-Cookie", sep="`");
         # var.global_set("99ab-str",req.http.X-cookie-99ab);

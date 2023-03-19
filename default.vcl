@@ -8,9 +8,15 @@ import str;
 include "devicedetect.vcl";
 
 backend default {
-    .host = "172.16.3.50";
-    .port = "31200";
+# Stage 1
+#    .host = "10.10.83.27";
+# Stage 2
+#     .host = "10.10.83.62";
+# production
+#    .host = "172.10.128.160";
+    .port = "80";
 }
+
 sub vcl_init {
     new client = reqwest.client();
 }
@@ -30,7 +36,7 @@ sub vcl_recv {
         if(cookie.isset("99_ab") && cookie.isset("GOOGLE_SEARCH_ID") && cookie.isset("_sess_id")){}
         else{
             std.log("executing set partial cookie");
-            client.init("get_visitor_id", "http://sanity10.infoedge.com/api-aggregator/content/get-visitor-id");
+            client.init("get_visitor_id", "http://99acres.com/api-aggregator/content/get-visitor-id");
             client.send("get_visitor_id");
             var.set("local_cookie",client.header("get_visitor_id","Set-Cookie", sep="`"));
 

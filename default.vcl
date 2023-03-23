@@ -20,12 +20,17 @@ sub vcl_recv {
     std.log("pre cookie " + req.http.Cookie);
 
     if (req.method == "PURGE") {
-        ban("obj.http.x-key == " + req.http.x-key);
+        ban("obj.http.Edge-Cache-Tag ~ " + req.http.CACHE_TAG);
         return (synth(200, "Cache successfully purged"));
     }
+    cookie.parse(req.http.Cookie);
 
-    if (req.http.Cookie) {
-        cookie.parse(req.http.Cookie);
+    if(cookie.isset("PROPLOGIN")){
+        return (pass);
+    }
+
+    if (cookie.isset("GOOGLE_SEARCH_ID")) {
+
 
         if(cookie.isset("99_ab") && cookie.isset("GOOGLE_SEARCH_ID") && cookie.isset("_sess_id")){}
         else{
@@ -116,10 +121,11 @@ sub vcl_hash {
 sub vcl_backend_response {
 
     set beresp.ttl = 0s;
-    if(bereq.url ~ "xid" || bereq.url ~ "spid"){
+    if(bereq.url ~ "xid" || bereq.url ~ "spid" && beresp.status >= 199 && beresp.status < 300){
         unset beresp.http.Cache-Control;
         set beresp.http.Cache-Control = "public";
-	    set beresp.ttl = 10m;    }
+	    set beresp.ttl = 10m;
+    }
     return(deliver);
 }
 
@@ -162,7 +168,8 @@ sub vcl_deliver {
         }
         else{
             std.log("MISS cookie: " + resp.http.Cookie);
-            header.append(resp.http.Set-Cookie, "99_ab=" + var.global_get("99ab-str"));
+            #header.append(resp.http.Set-Cookie, str.split(client.header("get_visitor_id","Set-Cookie", sep="`"),1,"`"));
+            header.append(resp.http.Set-Cookie,"99_ab=" + var.global_get("99ab-str") + "; Path=/; Domain=99acres.com; Max-Age=630720000; " );
         }
     }
 }

@@ -1,0 +1,41 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: varnish-deployment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: varnish
+  template:
+    metadata:
+      labels:
+        app: varnish
+    spec:
+      #      affinity:
+      #        nodeAffinity:
+      #          requiredDuringSchedulingIgnoredDuringExecution:
+      #            nodeSelectorTerms:
+      #              - matchExpressions:
+      #                  - key: kubernetes.io/hostname
+      #                    operator: In
+      #                    values:
+      #                      - worker-1 # Replace with the name of the node you want to deploy on
+      containers:
+        - name: varnish
+          image: hackerad/varnish:v0.1
+          volumeMounts:
+            - name: varnish-config
+              mountPath: /etc/varnish
+            - name: varnish-data
+              mountPath: /var/lib/varnish
+
+      volumes:
+        - name: varnish-config
+          hostPath:
+            path: /home/aadarsh/Documents/DEV/finance-peer/varnish
+
+        - name: varnish-data
+          hostPath:
+            path: /home/aadarsh/Documents/DEV/finance-peer/varnish
+

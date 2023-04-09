@@ -35,31 +35,12 @@ sub vcl_recv {
         std.log("executing set partial cookie");
         call set_cookie;
         std.log("after set cookie " + req.http.Cookie);
-        if(cookie.isset("99_ab")){
-            var.set_int("99ab-int",std.integer(cookie.get("99_ab")));
-        }
-        else{
-            var.set("99ab-str",var.global_get("99_ab"));
-            std.log("99ab-str val is" + var.get("99ab-str"));
-            var.set_int("99ab-int",std.integer(regsub( var.get("99ab-str"),"(?:(?:^|.*;\s*)99_ab\s*\=\s*([^;]*).*$)|^.*$", "\1")));
-        }
     }
-    else{
-        var.set("99ab-str",var.global_get("99_ab"));
-        std.log("99ab-str val is" + var.get("99ab-str"));
-        var.set_int("99ab-int",std.integer(cookie.get("99_ab")));
+
+    if(var.global_get("is_segmentation") == "y"){
+        call set_segmentation;
     }
-    if( var.get_int("99ab-int") >-1){
-        if(var.get_int("99ab-int") > -1 && var.get_int("99ab-int") < 50){
-            var.global_set("99ab-code", "A");
-        }
-        else{
-            var.global_set("99ab-code", "B");
-        }
-    }
-    else{
-        std.log("X-cookie-99ab val is -1" + var.get("99ab-int"));
-    }
+
 
     if(var.global_get("page_identifier") ~ "srp"){
         if((req.http.nn-cache-agent == "nnacresbot-desktop" || req.http.nn-cache-agent == "nnacresbot-mobile" || cookie.get("GOOGLE_SEARCH_ID") == "1111111111111111111")){
@@ -83,23 +64,15 @@ sub vcl_hash {
     elsif(req.http.X-UA-Device == "pc" || req.http.X-UA-Device == "bot" || req.http.nn-cache-agent == "nnacresbot-desktop"){
         hash_data("desktop");
     }
-    hash_data("99_ab=" + var.global_get("99ab-code"));
-
+    if(var.global_get("is_segmentation") == "y"){
+        hash_data("99_ab=" + var.global_get("99ab-code"));
+    }
     hash_data(req.url);
-
-    # if (req.http.host) {
-    #     hash_data(req.http.host);
-    # } else {
-    #     hash_data(server.ip);
-    # }
-
     return (lookup);
 }
 
 sub vcl_backend_response {
-
     set beresp.ttl = 0s;
-
     if(var.global_get("page_identifier") != "uncacheable" && beresp.status > 199 && beresp.status < 300){
         unset beresp.http.Cache-Control;
         set beresp.http.Cache-Control = "public";
@@ -173,16 +146,43 @@ sub page_properties{
     }
     elsif(req.url ~ "^(?!.*projects).*-ffid.*|.*-nrffid.*|.*-rnpffid.*|.*-npffid.*|.*-cffid.*|.*-crffid.*|.*-xffid.*"){
         var.global_set("page_identifier","srp");
+        var.global_set("is_segmentation","y");
+
     }
     else{
         var.global_set("page_identifier","uncacheable");
         var.global_set("do_esi","n");
+        var.global_set("is_segmentation","n");
     }
 }
 
+sub set_segmentation {
+    if(cookie.isset("99_ab")){
+        var.set_int("99ab-int",std.integer(cookie.get("99_ab"),101));   // exception
+    }
+    else{
+        var.set("99ab-str",var.global_get("99_ab"));
+        std.log("99ab-str val is" + var.get("99ab-str"));
+        var.set_int("99ab-int",std.integer(regsub( var.get("99ab-str"),"(?:(?:^|.*;\s*)99_ab\s*\=\s*([^;]*).*$)|^.*$", "\1"),101));
+    }
+    if( var.get_int("99ab-int") != 101){
+        if(var.global_get("page_identifier") == "srp"){
+            if(var.get_int("99ab-int") > 50 && var.get_int("99ab-int") < 56){
+                var.global_set("99ab-code", "A");
+            }
+            else{
+                var.global_set("99ab-code", "B");
+            }
+        }
+    }
+    else{
+        std.log("X-cookie-99ab val is -1" + var.get("99ab-int"));
+        return synth(502,"Invalid 99AB Code");
+    }
+}
 
 sub set_cookie {
-    client.init("get_visitor_id", "http://sanity9.infoedge.com/api-aggregator/content/get-visitor-id");
+    client.init("get_visitor_id", "http://sanity10.infoedge.com/api-aggregator/content/get-visitor-id");
     client.set_header("get_visitor_id","User-Agent","Varnish");
     client.send("get_visitor_id");
     set req.http.cookie-data = client.header("get_visitor_id","Set-Cookie", sep="`");

@@ -5,32 +5,24 @@ import cookie;
 import var;
 import header;
 import str;
+import xkey;
 include "devicedetect.vcl";
-
-backend default {
-# Stage 1
-#    .host = "10.10.83.27";
-# Stage 2
-    .host = "10.10.83.62";
-# production
-//    .host = "10.10.83.26";
-    .port = "80";
-}
-sub vcl_init {
-    new client = reqwest.client();
-}
+include "backends.vcl";
 
 sub vcl_recv {
-    call devicedetect;
-    call page_properties;
-    std.log("pre cookie " + req.http.Cookie);
 
     if (req.method == "PURGE") {
-        ban("obj.http.Edge-Cache-Tag ~ " + req.http.CACHE_TAG);
-        return (synth(200, "Cache successfully purged"));
+        var.set("purge-count",xkey.purge(req.http.CACHE_TAG));
+        return (synth(200, "Purged Count: " + var.get("purge-count")));
     }
-    cookie.parse(req.http.Cookie);
 
+    call page_properties;
+    if(var.global_get("page_identifier") == "uncacheable"){
+        return (pass);
+    }
+
+    std.log("pre cookie " + req.http.Cookie);
+    cookie.parse(req.http.Cookie);
     if(cookie.isset("PROPLOGIN")){
         return (pass);
     }
@@ -58,11 +50,10 @@ sub vcl_recv {
     elsif (req.url ~ "xid" || req.url ~ "spid"){
 	    return (hash);
     }
-
 }
 
 sub vcl_hash {
-
+    call devicedetect;
     if(req.http.X-UA-Device ~ "mobile" || req.http.X-UA-Device ~ "tablet" || req.http.nn-cache-agent == "nnacresbot-mobile"){
         hash_data("mobile");
     }
@@ -79,15 +70,16 @@ sub vcl_hash {
 sub vcl_backend_response {
     set beresp.ttl = 0s;
     if(var.global_get("page_identifier") != "uncacheable" && beresp.status > 199 && beresp.status < 300){
-        unset beresp.http.Cache-Control;
         set beresp.http.Cache-Control = "public";
         if(beresp.http.Edge-Control){
             if(beresp.http.Edge-Control == "no-store"){
                 set beresp.uncacheable = true;
                 set beresp.ttl = 0s;
+                set beresp.grace = 0s;
             }
             else{
-                set beresp.ttl = std.duration(str.split(str.split(beresp.http.Edge-Control,1,",") , 2,"="),10m);
+                set beresp.ttl = std.duration(str.split(str.split(beresp.http.Edge-Control,1,",") , 2,"="),0s);
+                set beresp.http.xkey = beresp.http.Edge-Cache-Tag;
             }
         }
         else{
@@ -106,18 +98,22 @@ sub vcl_backend_response {
 sub vcl_deliver {
 
     if (obj.hits > 0) {
-    	set resp.http.X-Cache = "HIT";
+    	set resp.http.X-Cache-Status = "HIT";
     } else {
-    	set resp.http.X-Cache = "MISS";
+    	set resp.http.X-Cache-Status = "MISS";
     }
 
     if(resp.http.X-Cache == "HIT"){
         header.remove(resp.http.Set-Cookie, "99_ab");
         header.remove(resp.http.Set-Cookie, "_sess_id");
         header.remove(resp.http.Set-Cookie, "GOOGLE_SEARCH_ID");
-        header.remove(resp.http.authorizationtoken,"authorizationtoken");
-        header.remove(resp.http.x-visitor-id,"x-visitor-id");
+        unset resp.http.x-visitor-id;
+        unset resp.http.authorizationtoken;
         header.remove(resp.http.Set-Cookie,"vary");
+
+        if(std.tolower(req.http.user-agent) ~ "lighthouse"){
+            header.append(resp.http.Set-Cookie,"is_lighthouse=true; ");
+        }
     }
 
     if ( var.global_get("page_identifier") != "uncacheable"){
@@ -127,7 +123,8 @@ sub vcl_deliver {
         if(!cookie.isset("GOOGLE_SEARCH_ID")){
             header.append(resp.http.Set-Cookie,var.global_get("GOOGLE_SEARCH_ID"));
             if(!req.http.x-visitor_id){
-                set resp.http.x-visitor-id = var.global_get("GOOGLE_SEARCH_ID");
+                set resp.http.x-visitor-id = regsub(var.global_get("GOOGLE_SEARCH_ID"),"(?:(?:^|.*;\s*)GOOGLE_SEARCH_ID\s*\=\s*([^;]*).*$)|^.*$", "\1");  // correction done
+                std.log("x-visitor-test " + resp.http.x-visitor_id + ":" + var.global_get("GOOGLE_SEARCH_ID"));
             }
         }
         if(!cookie.isset("_sess_id")){
@@ -136,8 +133,13 @@ sub vcl_deliver {
         if(!req.http.X-request-ID){
             set resp.http.X-request-ID = client.header("get_visitor_id","X-request-ID");
         }
+        if(cookie.isset("GOOGLE_SEARCH_ID") && !req.http.x-visitor-id){
+            #set resp.http.x-visitor-id = regsub(cookie.get("GOOGLE_SEARCH_ID"),"(?:(?:^|.*;\s*)GOOGLE_SEARCH_ID\s*\=\s*([^;]*).*$)|^.*$", "\1");
+            set resp.http.x-visitor-id = cookie.get("GOOGLE_SEARCH_ID");
+            std.log("setting visitor id");
+        }
     }
-
+    unset resp.http.xkey;
 }
 
 sub page_properties{
@@ -163,7 +165,7 @@ sub page_properties{
 
 sub set_segmentation {
     if(cookie.isset("99_ab")){
-        var.set_int("99ab-int",std.integer(cookie.get("99_ab"),101));   // exception
+        var.set_int("99ab-int",std.integer(cookie.get("99_ab"),101));
     }
     else{
         var.set("99ab-str",var.global_get("99_ab"));
@@ -182,14 +184,18 @@ sub set_segmentation {
     }
     else{
         std.log("X-cookie-99ab val is -1" + var.get("99ab-int"));
-        return synth(502,"Invalid 99AB Code");
+        return (synth(502,"Invalid 99AB Code"));
     }
 }
 
 sub set_cookie {
-    client.init("get_visitor_id", "http://99acres.com/api-aggregator/content/get-visitor-id");
+    client.init("get_visitor_id", var.global_get("api-url"));
     client.set_header("get_visitor_id","User-Agent","Varnish");
     client.send("get_visitor_id");
+    if(client.status("get_visitor_id") < 200 || client.status("get_visitor_id") > 210){
+        return (synth(502,"get-visitor-api returned null"));
+    }
+
     set req.http.cookie-data = client.header("get_visitor_id","Set-Cookie", sep="`");
     std.log("set_cookie initiated" + client.header("get_visitor_id","Set-Cookie", sep="`"));
 
@@ -197,6 +203,9 @@ sub set_cookie {
     var.set("second" , str.split(req.http.cookie-data,2,"`"));
     var.set("third" , str.split(req.http.cookie-data,3,"`"));
     # std.log("first is " + var.get("first"));
+    if(req.http.Cookie){
+        set req.http.Cookie = req.http.Cookie + "; ";
+    }
     if(!cookie.isset("_sess_id")){
         if(var.get("first") ~ "_sess_id"){
             var.global_set("_sess_id",var.get("first"));

@@ -37,8 +37,6 @@ sub vcl_recv {
     if(var.global_get("is_segmentation") == "y"){
         call set_segmentation;
     }
-
-
     if(var.global_get("page_identifier") ~ "srp"){
         if((req.http.nn-cache-agent == "nnacresbot-desktop" || req.http.nn-cache-agent == "nnacresbot-mobile" || cookie.get("GOOGLE_SEARCH_ID") == "1111111111111111111")){
             return (hash);

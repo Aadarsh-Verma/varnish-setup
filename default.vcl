@@ -38,7 +38,6 @@ sub vcl_recv {
         call set_segmentation;
     }
 
-
     if(var.global_get("page_identifier") ~ "srp"){
         if((req.http.nn-cache-agent == "nnacresbot-desktop" || req.http.nn-cache-agent == "nnacresbot-mobile" || cookie.get("GOOGLE_SEARCH_ID") == "1111111111111111111")){
             return (hash);
@@ -54,7 +53,7 @@ sub vcl_recv {
 
 sub vcl_hash {
     call devicedetect;
-    if(req.http.X-UA-Device ~ "mobile" || req.http.X-UA-Device ~ "tablet" || req.http.nn-cache-agent == "nnacresbot-mobile"){
+    if(req.http.X-UA-Device ~ "mobile" || req.http.X-UA-Device ~ "tablet" || req.http.nn-cache-agent == "nnacresbot-mobile" || std.tolower(req.http.User-Agent) ~ "mobile"){
         hash_data("mobile");
     }
     elsif(req.http.X-UA-Device == "pc" || req.http.X-UA-Device == "bot" || req.http.nn-cache-agent == "nnacresbot-desktop"){
@@ -108,11 +107,12 @@ sub vcl_deliver {
         header.remove(resp.http.Set-Cookie, "_sess_id");
         header.remove(resp.http.Set-Cookie, "GOOGLE_SEARCH_ID");
         unset resp.http.x-visitor-id;
+        unset resp.http.X-request-ID;
         unset resp.http.authorizationtoken;
         header.remove(resp.http.Set-Cookie,"vary");
 
         if(std.tolower(req.http.user-agent) ~ "lighthouse"){
-            header.append(resp.http.Set-Cookie,"is_lighthouse=true; ");
+            header.append(resp.http.Set-Cookie,"is_lighthouse=true");
         }
     }
 

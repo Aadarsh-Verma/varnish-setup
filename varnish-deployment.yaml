@@ -12,30 +12,52 @@ spec:
       labels:
         app: varnish
     spec:
-      #      affinity:
-      #        nodeAffinity:
-      #          requiredDuringSchedulingIgnoredDuringExecution:
-      #            nodeSelectorTerms:
-      #              - matchExpressions:
-      #                  - key: kubernetes.io/hostname
-      #                    operator: In
-      #                    values:
-      #                      - worker-1 # Replace with the name of the node you want to deploy on
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: 99app
+                    operator: In
+                    values:
+                      - g3statefulapp # Replace with the name of the node you want to deploy on
       containers:
         - name: varnish
-          image: hackerad/varnish:v0.1
+          image: hackerad/pesi-plus:1.0
+          readinessProbe:
+            httpGet:
+              path: /healthcheck
+              port: 6081
+            initialDelaySeconds: 10
+            timeoutSeconds: 10
+            periodSeconds: 10
+            successThreshold: 1
+          livenessProbe:
+            httpGet:
+              path: /healthcheck
+              port: 6081
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 10
+            successThreshold: 1
+          env:
+            - name: BRANCH
+              value: "sanity"
+            - name: DISK_SIZE
+              value: "2G"
+
           volumeMounts:
-            - name: varnish-config
-              mountPath: /etc/varnish
+            - name: varnish-logs
+              mountPath: /data/logs
             - name: varnish-data
               mountPath: /var/lib/varnish
 
       volumes:
-        - name: varnish-config
+        - name: varnish-logs
           hostPath:
-            path: /home/aadarsh/Documents/DEV/finance-peer/varnish
+            path: /data/ws-logs/varnish/
 
         - name: varnish-data
           hostPath:
-            path: /home/aadarsh/Documents/DEV/finance-peer/varnish
+            path: /data/varnish/
 

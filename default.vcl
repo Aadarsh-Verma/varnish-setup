@@ -11,7 +11,7 @@ include "backends.vcl";
 
 sub vcl_recv {
 
-    if (req.url == "/healthcheck") {
+    if (req.url ~ "^/healthcheck$") {
         return (synth(200, "OK"));
     }
     if (req.method == "PURGE") {

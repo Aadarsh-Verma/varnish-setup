@@ -49,7 +49,7 @@ sub vcl_recv {
             return (hash);
         }
     }
-    elsif (var.global_get('page_identifier') == "npxid" || var.global_get('page_identifier') == "spid"){
+    elsif (var.global_get("page_identifier") == "npxid" || var.global_get("page_identifier") == "spid"){
 	    return (hash);
     }
 }

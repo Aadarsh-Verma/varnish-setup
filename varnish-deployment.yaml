@@ -24,6 +24,8 @@ spec:
       containers:
         - name: varnish
           image: hackerad/pesi-plus:1.0
+          imagePullSecrets:
+            - name: nexuscreds
           readinessProbe:
             httpGet:
               path: /healthcheck
@@ -60,4 +62,19 @@ spec:
         - name: varnish-data
           hostPath:
             path: /data/varnish/
+---
 
+apiVersion: v1
+kind: Service
+metadata:
+  name: varnish-nodeport
+  labels:
+    app: varnish
+spec:
+  type: NodePort
+  ports:
+    - targetPort: 6081
+      port: 8080
+      nodePort: 31289
+  selector:
+    app: varnish

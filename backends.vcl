@@ -5,5 +5,5 @@ backend default {
 
 sub vcl_init {
     new client = reqwest.client();
-    var.global_set("api-url","http://99services.99.jsb9.net/content-generic-service/get-visitor-id");
+    var.global_set("api-url","http://10.10.83.27:80/content-generic-service/get-visitor-id");
 }

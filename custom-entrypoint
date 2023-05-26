@@ -1,0 +1,23 @@
+#!/bin/sh
+set -e
+
+# this will check if the first argument is a flag
+# but only works if all arguments require a hyphenated flag
+# -v; -SL; -f arg; etc will work, but not arg1 arg2
+if [ "$#" -eq 0 ] || [ "${1#-}" != "$1" ]; then
+  set -- varnishd \
+    -F \
+    -f /etc/varnish/default.vcl \
+    -a http=:88,HTTP \
+    -a proxy=:8543,PROXY -p feature=+http2 \
+    -s malloc,$VARNISH_SIZE \
+    "$@"
+fi
+
+#exec "$@"
+cd /etc/varnish && git checkout $BRANCH && git pull origin $BRANCH  || echo "checkout failed" && true
+/usr/sbin/varnishd -F -s disk=file,/var/lib/varnish/varnish_storage.bin,$DISK_SIZE -f /etc/varnish/default.vcl -a:6081 &
+
+/usr/bin/varnishncsa -F '%t %r' -D -w /data/logs/varnish.log -a &
+
+sleep 100000000000

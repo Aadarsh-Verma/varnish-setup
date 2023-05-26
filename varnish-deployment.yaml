@@ -20,28 +20,26 @@ spec:
                   - key: 99app
                     operator: In
                     values:
-                      - g3statefulapp # Replace with the name of the node you want to deploy on
+                      - g3statefulapp
       containers:
         - name: varnish
-          image: hackerad/pesi-plus:1.0
-          imagePullSecrets:
-            - name: nexuscreds
+          image: nexus.99acres.com
           readinessProbe:
-            httpGet:
-              path: /healthcheck
+            tcpSocket:
               port: 6081
-            initialDelaySeconds: 10
-            timeoutSeconds: 10
-            periodSeconds: 10
+            initialDelaySeconds: 5
+            timeoutSeconds: 2
+            periodSeconds: 2
             successThreshold: 1
+            failureThreshold: 2
           livenessProbe:
-            httpGet:
-              path: /healthcheck
+            tcpSocket:
               port: 6081
-            initialDelaySeconds: 10
-            periodSeconds: 10
-            timeoutSeconds: 10
+            initialDelaySeconds: 15
+            periodSeconds: 2
+            timeoutSeconds: 2
             successThreshold: 1
+            failureThreshold: 2
           env:
             - name: BRANCH
               value: "sanity"
@@ -62,6 +60,9 @@ spec:
         - name: varnish-data
           hostPath:
             path: /data/varnish/
+
+      imagePullSecrets:
+        - name : nexuscreds
 ---
 
 apiVersion: v1

@@ -77,5 +77,8 @@ spec:
     - targetPort: 6081
       port: 8080
       nodePort: 31289
+    - targetPort: 9131
+      port: 8085
+      nodePort: 31290
   selector:
     app: varnish

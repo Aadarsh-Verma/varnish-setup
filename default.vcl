@@ -11,6 +11,9 @@ include "backends.vcl";
 
 sub vcl_recv {
 
+    if (req.url ~ "^/healthcheck$") {
+        return (synth(200, "OK"));
+    }
     if (req.method == "PURGE") {
         var.set("purge-count",xkey.purge(req.http.CACHE_TAG));
         return (synth(200, "Purged Count: " + var.get("purge-count")));
@@ -30,13 +33,14 @@ sub vcl_recv {
     if(!cookie.isset("99_ab") || !cookie.isset("GOOGLE_SEARCH_ID") || !cookie.isset("_sess_id") || !req.http.X-request-ID){
 
         std.log("executing set partial cookie");
-        call set_cookie;
+        #  call set_cookie;
         std.log("after set cookie " + req.http.Cookie);
     }
 
     if(var.global_get("is_segmentation") == "y"){
         call set_segmentation;
     }
+
     if(var.global_get("page_identifier") ~ "srp"){
         if((req.http.nn-cache-agent == "nnacresbot-desktop" || req.http.nn-cache-agent == "nnacresbot-mobile" || cookie.get("GOOGLE_SEARCH_ID") == "1111111111111111111")){
             return (hash);
@@ -45,14 +49,14 @@ sub vcl_recv {
             return (hash);
         }
     }
-    elsif (req.url ~ "xid" || req.url ~ "spid"){
+    elsif (var.global_get("page_identifier") == "npxid" || var.global_get("page_identifier") == "spid"){
 	    return (hash);
     }
 }
 
 sub vcl_hash {
     call devicedetect;
-    if(req.http.X-UA-Device ~ "mobile" || req.http.X-UA-Device ~ "tablet" || req.http.nn-cache-agent == "nnacresbot-mobile"){
+    if(req.http.X-UA-Device ~ "mobile" || req.http.X-UA-Device ~ "tablet" || req.http.nn-cache-agent == "nnacresbot-mobile" || std.tolower(req.http.User-Agent) ~ "mobile"){
         hash_data("mobile");
     }
     elsif(req.http.X-UA-Device == "pc" || req.http.X-UA-Device == "bot" || req.http.nn-cache-agent == "nnacresbot-desktop"){
@@ -64,7 +68,9 @@ sub vcl_hash {
     hash_data(req.url);
     return (lookup);
 }
-
+sub vcl_hit {
+    call set_cookie;
+}
 sub vcl_backend_response {
     set beresp.ttl = 0s;
     if(var.global_get("page_identifier") != "uncacheable" && beresp.status > 199 && beresp.status < 300){
@@ -106,23 +112,24 @@ sub vcl_deliver {
         header.remove(resp.http.Set-Cookie, "_sess_id");
         header.remove(resp.http.Set-Cookie, "GOOGLE_SEARCH_ID");
         unset resp.http.x-visitor-id;
+        unset resp.http.X-request-ID;
         unset resp.http.authorizationtoken;
         header.remove(resp.http.Set-Cookie,"vary");
 
         if(std.tolower(req.http.user-agent) ~ "lighthouse"){
-            header.append(resp.http.Set-Cookie,"is_lighthouse=true; ");
+            header.append(resp.http.Set-Cookie,"is_lighthouse=true");
         }
     }
 
-    if ( var.global_get("page_identifier") != "uncacheable"){
+    if ( var.global_get("page_identifier") != "uncacheable" && resp.http.X-Cache-Status == "HIT"){
         if(!cookie.isset("99_ab")){
             header.append(resp.http.Set-Cookie,var.global_get("99_ab"));
         }
         if(!cookie.isset("GOOGLE_SEARCH_ID")){
             header.append(resp.http.Set-Cookie,var.global_get("GOOGLE_SEARCH_ID"));
-            if(!req.http.x-visitor_id){
+            if(!req.http.x-visitor-id){
                 set resp.http.x-visitor-id = regsub(var.global_get("GOOGLE_SEARCH_ID"),"(?:(?:^|.*;\s*)GOOGLE_SEARCH_ID\s*\=\s*([^;]*).*$)|^.*$", "\1");  // correction done
-                std.log("x-visitor-test " + resp.http.x-visitor_id + ":" + var.global_get("GOOGLE_SEARCH_ID"));
+                std.log("x-visitor-test " + resp.http.x-visitor-id + ":" + var.global_get("GOOGLE_SEARCH_ID"));
             }
         }
         if(!cookie.isset("_sess_id")){

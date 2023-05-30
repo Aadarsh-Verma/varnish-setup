@@ -14,9 +14,21 @@ if [ "$#" -eq 0 ] || [ "${1#-}" != "$1" ]; then
     "$@"
 fi
 
+printenv
+
+if [ -z $HOSTNAME ]; then
+  HOSTNAME=data
+fi
+echo "pod ip is " $HOSTNAME
 #exec "$@"
-cd /etc/varnish/ && git checkout $BRANCH && git pull origin $BRANCH  || echo "checkout failed" && true
-/usr/sbin/varnishd -F -s disk=file,/var/lib/varnish/varnish_storage.bin,$DISK_SIZE -f /etc/varnish/default.vcl -a:6081 &
+cd /etc/varnish/ && git checkout $BRANCH && git pull origin $BRANCH || echo "checkout failed" && true
+#mkdir /var/lib/varnish/$HOSTNAME
+if [ ! -d /var/lib/varnish/$HOSTNAME ]; then
+  # Create the directory
+  mkdir -p /var/lib/varnish/$HOSTNAME
+fi
+
+/usr/sbin/varnishd -F -s disk=file,/var/lib/varnish/$HOSTNAME/varnish_storage.bin,$DISK_SIZE -f /etc/varnish/default.vcl -a:6081 &
 #/usr/sbin/varnishd -F -s disk=file,/var/lib/varnish/varnish_storage.bin,$DISK_SIZE -f /etc/varnish/default.vcl -a:6081 -p feature=+esi_disable_xml_check &
 
 /usr/bin/varnishncsa -F '%t:::%r:::%s:::%O:::%{User-agent}i:::%{x-request-id}o:::%{X-UA-Device}i:::%{Varnish:handling}x:::%{x-api-time}i:::%{ms}T' -D -w /data/logs/varnish.log -a &

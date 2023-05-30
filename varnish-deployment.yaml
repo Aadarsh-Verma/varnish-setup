@@ -12,6 +12,10 @@ spec:
       labels:
         app: varnish
     spec:
+      hostAliases:
+        - ip: "192.168.2.108"
+          hostnames:
+            - "gitlabweb.infoedge.com"
       affinity:
         nodeAffinity:
           requiredDuringSchedulingIgnoredDuringExecution:
@@ -24,6 +28,13 @@ spec:
       containers:
         - name: varnish
           image: nexus.99acres.com
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "500m"
+            limits:
+              memory: "1024Mi"
+              cpu: "2000m"
           readinessProbe:
             tcpSocket:
               port: 6081
@@ -49,17 +60,20 @@ spec:
           volumeMounts:
             - name: varnish-logs
               mountPath: /data/logs
+
             - name: varnish-data
               mountPath: /var/lib/varnish
+              subPathExpr: $(POD_NAME)
 
       volumes:
         - name: varnish-logs
           hostPath:
-            path: /data/ws-logs/varnish/
+            type: directory
+            path: /data/ws-logs/varnish
 
         - name: varnish-data
           hostPath:
-            path: /data/varnish/
+            path: /data/varnish
 
       imagePullSecrets:
         - name : nexuscreds

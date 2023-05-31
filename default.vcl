@@ -206,7 +206,7 @@ sub set_segmentation {
 }
 
 sub set_cookie {
-    client.init("get_visitor_id", var.get("api-url"));
+    client.init("get_visitor_id", var.global_get("api-url"));
     client.set_header("get_visitor_id","User-Agent","Varnish");
 
     std.log("cookie as string is " + cookie.get_string());

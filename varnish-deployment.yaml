@@ -41,8 +41,8 @@ spec:
             initialDelaySeconds: 5
             timeoutSeconds: 2
             periodSeconds: 2
-            successThreshold: 1
-            failureThreshold: 2
+            successThreshold: 2
+            failureThreshold: 3
           livenessProbe:
             tcpSocket:
               port: 6081
@@ -59,7 +59,7 @@ spec:
 
           volumeMounts:
             - name: varnish-logs
-              mountPath: /data/logs
+              mountPath: /logs
 
             - name: varnish-data
               mountPath: /var/lib/varnish

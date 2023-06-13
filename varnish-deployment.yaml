@@ -1,7 +1,7 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: varnish-deployment
+  name: varnish-srp
 spec:
   replicas: 1
   selector:
@@ -12,30 +12,93 @@ spec:
       labels:
         app: varnish
     spec:
-      #      affinity:
-      #        nodeAffinity:
-      #          requiredDuringSchedulingIgnoredDuringExecution:
-      #            nodeSelectorTerms:
-      #              - matchExpressions:
-      #                  - key: kubernetes.io/hostname
-      #                    operator: In
-      #                    values:
-      #                      - worker-1 # Replace with the name of the node you want to deploy on
+      hostAliases:
+        - ip: "192.168.2.108"
+          hostnames:
+            - "gitlabweb.infoedge.com"
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: 99-prod-stateful2
+                    operator: In
+                    values:
+                      - true
       containers:
         - name: varnish
-          image: hackerad/varnish:v0.1
+          image: 99nexus.infoedge.com/varnish:stage-1.0
+
+          resources:
+            requests:
+              memory: "1Gi"
+              cpu: "2000m"
+            limits:
+              memory: "2Gi"
+              cpu: "3000m"
+          readinessProbe:
+            tcpSocket:
+              port: 6081
+            initialDelaySeconds: 5
+            timeoutSeconds: 2
+            periodSeconds: 3
+            successThreshold: 2
+            failureThreshold: 3
+          livenessProbe:
+            tcpSocket:
+              port: 6081
+            initialDelaySeconds: 15
+            periodSeconds: 3
+            timeoutSeconds: 2
+            successThreshold: 1
+            failureThreshold: 2
+          env:
+            - name: BRANCH
+              value: "stage"
+            - name: DISK_SIZE
+              value: "3G"
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
           volumeMounts:
-            - name: varnish-config
-              mountPath: /etc/varnish
+            - name: varnish-logs
+              mountPath: /logs
+
             - name: varnish-data
-              mountPath: /var/lib/varnish
+              mountPath: /data
+              subPathExpr: $(POD_NAME)
 
       volumes:
-        - name: varnish-config
+        - name: varnish-logs
           hostPath:
-            path: /home/aadarsh/Documents/DEV/finance-peer/varnish
+            type: directory
+            path: /data/ws-logs/varnish
 
         - name: varnish-data
           hostPath:
-            path: /home/aadarsh/Documents/DEV/finance-peer/varnish
+            path: /data/statefulapp/varnish
 
+      imagePullSecrets:
+        - name : nexuscreds
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: varnish-nodeport
+  labels:
+    app: varnish
+spec:
+  type: NodePort
+  ports:
+    - targetPort: 6081
+      port: 8080
+      nodePort: 31289
+      name: varnish-nodeport
+    - targetPort: 9131
+      port: 8085
+      nodePort: 31290
+      name: varnish-metrics-nodeport
+  selector:
+    app: varnish

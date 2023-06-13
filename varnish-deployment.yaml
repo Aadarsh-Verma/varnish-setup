@@ -1,7 +1,7 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: varnish-srp
+  name: varnish-deployment
 spec:
   replicas: 1
   selector:
@@ -16,18 +16,18 @@ spec:
         - ip: "192.168.2.108"
           hostnames:
             - "gitlabweb.infoedge.com"
-      affinity:
-        nodeAffinity:
-          requiredDuringSchedulingIgnoredDuringExecution:
-            nodeSelectorTerms:
-              - matchExpressions:
-                  - key: 99-prod-stateful2
-                    operator: In
-                    values:
-                      - "true"
+#      affinity:
+#        nodeAffinity:
+#          requiredDuringSchedulingIgnoredDuringExecution:
+#            nodeSelectorTerms:
+#              - matchExpressions:
+#                  - key: 99-prod-stateful2
+#                    operator: In
+#                    values:
+#                      - "true"
       containers:
         - name: varnish
-          image: 99nexus.infoedge.com/varnish:stage-1.0
+          image: 99nexus.infoedge.com/varnish:stage-1.1
 
           resources:
             requests:

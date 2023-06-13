@@ -24,7 +24,7 @@ spec:
                   - key: 99-prod-stateful2
                     operator: In
                     values:
-                      - true
+                      - "true"
       containers:
         - name: varnish
           image: 99nexus.infoedge.com/varnish:stage-1.0
@@ -72,7 +72,6 @@ spec:
       volumes:
         - name: varnish-logs
           hostPath:
-            type: directory
             path: /data/ws-logs/varnish
 
         - name: varnish-data

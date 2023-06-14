@@ -91,11 +91,10 @@ sub vcl_backend_response {
             }
         }
         else{
-            set beresp.ttl = 10m;
+            set beresp.ttl = 0s;
         }
         if(var.get("do_esi") == "y"){
             set beresp.do_esi = true;
-            set beresp.ttl = 2h;
         }
     }
 

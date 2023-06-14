@@ -42,7 +42,7 @@ sub vcl_recv {
         call set_segmentation;
     }
 
-    if(var.get("page_identifier") ~ "srp"){
+    if(var.get("page_identifier") == "srp"){
         if((req.http.nn-cache-agent == "nnacresbot-desktop" || req.http.nn-cache-agent == "nnacresbot-mobile" || cookie.get("GOOGLE_SEARCH_ID") == "1111111111111111111")){
             return (hash);
         }
@@ -50,7 +50,7 @@ sub vcl_recv {
             return (hash);
         }
     }
-    elsif (req.url ~ "xid" || req.url ~ "spid"){
+    elsif (var.get("page_identifier") == "npxid" || var.get("page_identifier") == "spid"){
             return (hash);
     }
 }
@@ -155,18 +155,17 @@ sub page_properties{
     if((req.http.GEOIP-ISP ~ "google" || req.http.GEOIP-ISP ~ "Google") && (req.http.User-Agent ~ "AdsBot-Google" || req.http.User-Agent ~ "Googlebot")){
         var.set("isBot","y");
     }
-    if(req.url ~ "npxid"){
+    if(req.url ~ ".*-npxid-.*"){
         var.set("page_identifier","npxid");
         var.set("do_esi","y");
     }
-    elsif(req.url ~ "spid"){
+    elsif(req.url ~ ".*-spid-.*"){
         var.set("page_identifier","spid");
         var.set("do_esi","y");
     }
     elsif(req.url ~ "^(?!.*projects).*-ffid.*|.*-nrffid.*|.*-rnpffid.*|.*-npffid.*|.*-cffid.*|.*-crffid.*|.*-xffid.*"){
         var.set("page_identifier","srp");
         var.set("is_segmentation","n");
-
     }
     else{
         var.set("page_identifier","uncacheable");

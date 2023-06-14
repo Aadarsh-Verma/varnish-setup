@@ -16,15 +16,15 @@ spec:
         - ip: "192.168.2.108"
           hostnames:
             - "gitlabweb.infoedge.com"
-#      affinity:
-#        nodeAffinity:
-#          requiredDuringSchedulingIgnoredDuringExecution:
-#            nodeSelectorTerms:
-#              - matchExpressions:
-#                  - key: 99-prod-stateful2
-#                    operator: In
-#                    values:
-#                      - "true"
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: 99-stage
+                    operator: In
+                    values:
+                      - "true"
       containers:
         - name: varnish
           image: 99nexus.infoedge.com/varnish:stage-1.1
@@ -68,7 +68,6 @@ spec:
             - name: varnish-data
               mountPath: /data
               subPathExpr: $(POD_NAME)
-
       volumes:
         - name: varnish-logs
           hostPath:

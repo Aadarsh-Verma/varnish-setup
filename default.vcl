@@ -93,6 +93,7 @@ sub vcl_backend_response {
         else{
             set beresp.ttl = 0s;
         }
+        std.log("do_esi variable is " + var.get("do_esi"));
         if(var.get("do_esi") == "y"){
             set beresp.do_esi = true;
         }

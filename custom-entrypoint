@@ -15,6 +15,7 @@ if [ "$#" -eq 0 ] || [ "${1#-}" != "$1" ]; then
 fi
 
 #exec "$@"
+export TZ="Asia/Kolkata"
 cd /etc/varnish && git checkout $BRANCH && git pull origin $BRANCH  || echo "checkout failed" && true
 /usr/sbin/varnishd -F -s disk=file,/var/lib/varnish/varnish_storage.bin,$DISK_SIZE -f /etc/varnish/default.vcl -a:6081 &
 /usr/bin/varnishncsa -F '%t:::%r:::%s:::%O:::%{User-agent}i:::%{x-request-id}o:::%{X-UA-Device}i:::%{Varnish:handling}x:::%{x-api-time}i:::%{ms}T' -D -w /logs/app/app.log -a &

@@ -6,10 +6,12 @@ import var;
 import header;
 import str;
 import xkey;
+import directors;
 include "devicedetect.vcl";
 include "backends.vcl";
-sub vcl_recv {
 
+sub vcl_recv {
+    set req.backend_hint = vdir.backend();
     if (req.method == "PURGE" || req.method == "PUT") {
         if(req.url ~ "xkey"){
             var.set("purge-count",xkey.purge(req.http.CACHE_TAG));
@@ -19,7 +21,9 @@ sub vcl_recv {
             return (purge);
         }
     }
-
+    if (req.url ~ "health-check"){
+        return (synth(200,"OK"));
+    }
     call page_properties;
     if(var.get("page_identifier") == "uncacheable"){
         return (pass);
@@ -30,34 +34,29 @@ sub vcl_recv {
     if(cookie.isset("PROPLOGIN")){
         return (pass);
     }
-
-    if(!cookie.isset("99_ab") || !cookie.isset("GOOGLE_SEARCH_ID") || !cookie.isset("_sess_id") || !req.http.X-request-ID){
-
-        std.log("executing set partial cookie");
-        #call set_cookie;
-        std.log("after set cookie " + req.http.Cookie);
-    }
-
     if(var.get("is_segmentation") == "y"){
         call set_segmentation;
     }
 
-    if(var.get("page_identifier") == "srp"){
+    if(var.get("page_identifier") ~ "srp"){
         if((req.http.nn-cache-agent == "nnacresbot-desktop" || req.http.nn-cache-agent == "nnacresbot-mobile" || cookie.get("GOOGLE_SEARCH_ID") == "1111111111111111111")){
             return (hash);
         }
-        if(req.http.User-Agent ~ "AdsBot-Google" || req.http.User-Agent ~ "Googlebot"){
+        if( var.get("isBot") == "y" ){
             return (hash);
         }
     }
     elsif (var.get("page_identifier") == "npxid" || var.get("page_identifier") == "spid"){
             return (hash);
     }
+    set req.http.varnish-is-caching = false;
+    return (pass);
 }
 
 sub vcl_hash {
     call devicedetect;
-    if(req.http.X-UA-Device ~ "mobile" || req.http.X-UA-Device ~ "tablet" || req.http.nn-cache-agent == "nnacresbot-mobile"){
+    set req.http.varnish-is-caching = true;
+    if(req.http.X-UA-Device ~ "mobile" || req.http.X-UA-Device ~ "tablet" || req.http.nn-cache-agent == "nnacresbot-mobile" || std.tolower(req.http.User-Agent) ~ "mobile"){
         hash_data("mobile");
     }
     elsif(req.http.X-UA-Device == "pc" || req.http.X-UA-Device == "bot" || req.http.nn-cache-agent == "nnacresbot-desktop"){
@@ -73,28 +72,31 @@ sub vcl_hash {
     return (lookup);
 }
 sub vcl_hit {
-    set req.http.x-api-time = std.timed_call(set_cookie);
+    if(!cookie.isset("99_ab") || !cookie.isset("GOOGLE_SEARCH_ID") || !cookie.isset("_sess_id") || !req.http.X-request-ID){
+        set req.http.x-api-time = std.timed_call(set_cookie);
+    }
 }
 sub vcl_backend_response {
-    set beresp.ttl = 0s;
-    if(var.get("page_identifier") != "uncacheable" && beresp.status > 199 && beresp.status < 300){
-        set beresp.http.Cache-Control = "public";
+    if(bereq.http.varnish-is-caching != "false" && beresp.status > 199 && beresp.status < 300){
         if(beresp.http.nn-cache-control){
             if(beresp.http.nn-cache-control == "no-store"){
                 set beresp.uncacheable = true;
-                set beresp.ttl = 0s;
-                set beresp.grace = 0s;
             }
             else{
-                set beresp.ttl = std.duration(str.split(str.split(beresp.http.nn-cache-control,1,",") , 2,"="),0s);
+                set beresp.http.Cache-Control = "public";
                 set beresp.http.xkey = beresp.http.Edge-Cache-Tag;
+                set beresp.ttl = std.duration(str.split(str.split(beresp.http.nn-cache-control,1,",") , 2,"="),0s);
+                if (bereq.url ~ "^(?!.*projects).*-ffid.*|.*-nrffid.*|.*-rnpffid.*|.*-npffid.*|.*-cffid.*|.*-crffid.*|.*-xffid.*"){
+                    set beresp.ttl = 24h;
+                    unset beresp.http.xkey;
+                }
+                set beresp.grace = 0s;
             }
         }
         else{
-            set beresp.ttl = 0s;
+            set beresp.uncacheable = true;
         }
-        std.log("do_esi variable is " + var.get("do_esi"));
-        if(var.get("do_esi") == "y"){
+        if(bereq.http.do-esi == "true"){
             set beresp.do_esi = true;
         }
     }
@@ -111,29 +113,29 @@ sub vcl_deliver {
     } else {
         set resp.http.X-Cache-Status = "MISS";
     }
-
-    if(resp.http.X-Cache == "HIT"){
+    if(resp.http.X-Cache-Status == "HIT"){
         header.remove(resp.http.Set-Cookie, "99_ab");
         header.remove(resp.http.Set-Cookie, "_sess_id");
         header.remove(resp.http.Set-Cookie, "GOOGLE_SEARCH_ID");
         unset resp.http.x-visitor-id;
+        unset resp.http.X-request-ID;
+        unset resp.http.nn-cache-ttl;
         unset resp.http.authorizationtoken;
         header.remove(resp.http.Set-Cookie,"vary");
-
+        set resp.http.x-cache-age = resp.http.Age;
         if(std.tolower(req.http.user-agent) ~ "lighthouse"){
-            header.append(resp.http.Set-Cookie,"is_lighthouse=true; ");
+            header.append(resp.http.Set-Cookie,"ilh=true");
         }
     }
 
-    if ( var.get("page_identifier") != "uncacheable" && resp.http.X-Cache-Status == "HIT" ){
+    if ( var.get("page_identifier") != "uncacheable" && resp.http.X-Cache-Status == "HIT"){
         if(!cookie.isset("99_ab")){
             header.append(resp.http.Set-Cookie,var.get("99_ab"));
         }
         if(!cookie.isset("GOOGLE_SEARCH_ID")){
             header.append(resp.http.Set-Cookie,var.get("GOOGLE_SEARCH_ID"));
             if(!req.http.x-visitor_id){
-                set resp.http.x-visitor-id = regsub(var.get("GOOGLE_SEARCH_ID"),"(?:(?:^|.*;\s*)GOOGLE_SEARCH_ID\s*\=\s*([^;]*).*$)|^.*$", "\1");
-                std.log("x-visitor-test " + resp.http.x-visitor_id + ":" + var.get("GOOGLE_SEARCH_ID"));
+                set resp.http.x-visitor-id = regsub(var.get("GOOGLE_SEARCH_ID"),"(?:(?:^|.*;\s*)GOOGLE_SEARCH_ID\s*\=\s*([^;]*).*$)|^.*$", "\1");  // correction done
             }
         }
         if(!cookie.isset("_sess_id")){
@@ -143,33 +145,37 @@ sub vcl_deliver {
             set resp.http.X-request-ID = client.header("get_visitor_id","X-request-ID");
         }
         if(cookie.isset("GOOGLE_SEARCH_ID") && !req.http.x-visitor-id){
-            #set resp.http.x-visitor-id = regsub(cookie.get("GOOGLE_SEARCH_ID"),"(?:(?:^|.*;\s*)GOOGLE_SEARCH_ID\s*\=\s*([^;]*).*$)|^.*$", "\1");
             set resp.http.x-visitor-id = cookie.get("GOOGLE_SEARCH_ID");
-            std.log("setting visitor id");
         }
+//        if(!cookie.isset("auth_token")){
+//            header.append(resp.http.Set-Cookie,client.header("get_visitor_id","Authorizationtoken"));
+//        }
     }
     unset resp.http.xkey;
 }
 
 sub page_properties{
-    if((req.http.GEOIP-ISP ~ "google" || req.http.GEOIP-ISP ~ "Google") && (req.http.User-Agent ~ "AdsBot-Google" || req.http.User-Agent ~ "Googlebot")){
+    if( (req.http.User-Agent ~ "AdsBot-Google" || req.http.User-Agent ~ "Googlebot")){
         var.set("isBot","y");
     }
-    if(req.url ~ ".*-npxid-.*"){
+    if(req.url ~ "-npxid-"){
         var.set("page_identifier","npxid");
-        var.set("do_esi","y");
+        set req.http.do-esi=true;
     }
-    elsif(req.url ~ ".*-spid-.*"){
+    if(req.url ~ "-spid-"){
         var.set("page_identifier","spid");
-        var.set("do_esi","y");
+        set req.http.do-esi=true;
+        var.set("is_segmentation","n");
     }
     elsif(req.url ~ "^(?!.*projects).*-ffid.*|.*-nrffid.*|.*-rnpffid.*|.*-npffid.*|.*-cffid.*|.*-crffid.*|.*-xffid.*"){
         var.set("page_identifier","srp");
         var.set("is_segmentation","n");
+
     }
     else{
         var.set("page_identifier","uncacheable");
-        var.set("do_esi","n");
+        set req.http.varnish-is-caching = false;
+        set req.http.do-esi=false;
         var.set("is_segmentation","n");
     }
 }
@@ -207,8 +213,6 @@ sub set_segmentation {
 sub set_cookie {
     client.init("get_visitor_id", var.global_get("api-url"));
     client.set_header("get_visitor_id","User-Agent","Varnish");
-
-    std.log("cookie as string is " + cookie.get_string());
     client.set_header("get_visitor_id","Cookie",cookie.get_string());
     client.send("get_visitor_id");
     if(client.status("get_visitor_id") < 200 || client.status("get_visitor_id") > 210){
@@ -216,13 +220,12 @@ sub set_cookie {
     }
 
     set req.http.cookie-data = client.header("get_visitor_id","Set-Cookie", sep="`");
-    std.log("set_cookie initiated" + client.header("get_visitor_id","Set-Cookie", sep="`"));
+    std.log("api call cookie data " + client.header("get_visitor_id","Set-Cookie", sep="`"));
 
     var.set("first" , str.split(req.http.cookie-data,1,"`"));
     var.set("second" , str.split(req.http.cookie-data,2,"`"));
     var.set("third" , str.split(req.http.cookie-data,3,"`"));
-    # std.log("first is " + var.get("first"));
-     if(req.http.Cookie != ""){
+    if(req.http.Cookie != ""){
         set req.http.Cookie = req.http.Cookie + "; ";
     }
     if(!cookie.isset("_sess_id")){

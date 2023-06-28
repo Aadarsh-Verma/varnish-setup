@@ -25,7 +25,7 @@ sub vcl_recv {
         return (synth(200,"OK"));
     }
     call page_properties;
-    if(var.get("page_identifier") == "uncacheable"){
+    if(var.get("page_identifier") ~ "uncacheable"){
         return (pass);
     }
 
@@ -40,13 +40,16 @@ sub vcl_recv {
 
     if(var.get("page_identifier") ~ "srp"){
         if((req.http.nn-cache-agent == "nnacresbot-desktop" || req.http.nn-cache-agent == "nnacresbot-mobile" || cookie.get("GOOGLE_SEARCH_ID") == "1111111111111111111")){
+            set req.http.varnish-is-caching = "Y";
             return (hash);
         }
         if( var.get("isBot") == "Y" ){
+            set req.http.varnish-is-caching = "Y";
             return (hash);
         }
     }
-    elsif (var.get("page_identifier") == "npxid" || var.get("page_identifier") == "spid"){
+    elsif (var.get("page_identifier") ~ "npxid" || var.get("page_identifier") ~ "spid"){
+            set req.http.varnish-is-caching = "Y";
             return (hash);
     }
     set req.http.varnish-is-caching = "N";
@@ -55,7 +58,6 @@ sub vcl_recv {
 
 sub vcl_hash {
     call devicedetect;
-    set req.http.varnish-is-caching = "Y";
     if(req.http.X-UA-Device ~ "mobile" || req.http.X-UA-Device ~ "tablet" || req.http.nn-cache-agent == "nnacresbot-mobile" || std.tolower(req.http.User-Agent) ~ "mobile"){
         hash_data("mobile");
     }
@@ -147,9 +149,9 @@ sub vcl_deliver {
         if(cookie.isset("GOOGLE_SEARCH_ID") && !req.http.x-visitor-id){
             set resp.http.x-visitor-id = cookie.get("GOOGLE_SEARCH_ID");
         }
-//        if(!cookie.isset("auth_token")){
-//            header.append(resp.http.Set-Cookie,client.header("get_visitor_id","Authorizationtoken"));
-//        }
+        if(!cookie.isset("auth_token")){
+            header.append(resp.http.Set-Cookie,"auth_token=" + client.header("get_visitor_id","Authorizationtoken"));
+        }
     }
     unset resp.http.xkey;
 }
@@ -160,9 +162,9 @@ sub page_properties{
     }
     if(req.url ~ "-npxid-"){
         var.set("page_identifier","npxid");
-        set req.http.do-esi=true;
+//        set req.http.do-esi=true;
     }
-    if(req.url ~ "-spid-"){
+    elsif(req.url ~ "-spid-"){
         var.set("page_identifier","spid");
         set req.http.do-esi=true;
         var.set("is_segmentation","N");
